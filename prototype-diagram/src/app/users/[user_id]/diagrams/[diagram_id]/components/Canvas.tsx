@@ -13,6 +13,7 @@ import {
   Node,
 } from "@xyflow/react";
 import {v4 as uuid} from "uuid";
+import * as Automerge from "@automerge/automerge";
 
 import "@xyflow/react/dist/style.css";
 
@@ -47,6 +48,7 @@ export default function Canvas({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const {screenToFlowPosition} = useReactFlow();
   const [type] = useDnD();
+  const [doc, setDoc] = useState(Automerge.from({nodes: [], edges: []}));
 
   // Join diagram room
   useEffect(() => {
@@ -62,21 +64,37 @@ export default function Canvas({
     if (!initialDiagram) return;
     setNodes(initialDiagram.nodes || []);
     setEdges(initialDiagram.edges || []);
+    setDoc(
+      Automerge.from({
+        nodes: initialDiagram.nodes || [],
+        edges: initialDiagram.edges || [],
+      })
+    );
+    console.log(doc);
     setTimeout(() => setCanEmitUpdate(true), 500);
   }, []);
 
   // Subscribe to diagram updates
   useEffect(() => {
     if (!socket) return;
-    const handler = ({json}: any) => {
-      const updatedDiagram = JSON.parse(json);
-      if (!updatedDiagram) return;
-
+    const handler = (data: {changes: Uint8Array; diagramId: string}) => {
       setCanEmitUpdate(false);
       setIsRemoteAnimating(true);
 
-      setNodes(updatedDiagram.nodes || []);
-      setEdges(updatedDiagram.edges || []);
+      if (data.diagramId !== diagramId) return;
+
+      setDoc((prevDoc) => {
+        const [newDoc] = Automerge.applyChanges(prevDoc, [
+          Uint8Array.from(data.changes),
+        ]);
+
+        if (newDoc.nodes && newDoc.edges) {
+          setNodes(newDoc.nodes);
+          setEdges(newDoc.edges);
+        }
+
+        return newDoc;
+      });
 
       setTimeout(() => setCanEmitUpdate(true), 500);
       setTimeout(() => setIsRemoteAnimating(false), 500);
@@ -100,9 +118,25 @@ export default function Canvas({
   const emitUpdate = useCallback(
     debounce((diagramId: string, updatedDiagram: any) => {
       if (!socket) return;
-      socket.emit("updateDiagram", {
-        diagramId,
-        json: JSON.stringify(updatedDiagram),
+
+      const updatedDoc = Automerge.change(Automerge.clone(doc), (d) => {
+        d.nodes = updatedDiagram.nodes;
+        d.edges = updatedDiagram.edges;
+      });
+
+      const changes = Automerge.getChanges(doc, updatedDoc);
+      if (!changes.length) return;
+
+      setDoc(updatedDoc);
+      console.log(updatedDoc);
+      console.log(doc);
+
+      changes.forEach((change) => {
+        socket.emit("updateDiagram", {
+          diagramId,
+          json: JSON.stringify(updatedDoc),
+          changes: Array.from(change),
+        });
       });
     }, 300),
     []

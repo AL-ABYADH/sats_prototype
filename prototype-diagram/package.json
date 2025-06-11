@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@automerge/automerge": "^2.2.9",
     "@xyflow/react": "^12.6.0",
     "lodash": "^4.17.21",
     "next": "^15.3.2",
