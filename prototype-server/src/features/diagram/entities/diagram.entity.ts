@@ -5,6 +5,6 @@ export class Diagram {
   title: string;
   json: string;
   ownerId: string;
-  owner: User | null;
-  collaborators: User[] | null;
+  owner?: User | null;
+  collaborators?: User[] | null;
 }

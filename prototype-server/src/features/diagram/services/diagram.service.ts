@@ -26,6 +26,24 @@ export class DiagramService {
   }
 
   async update(diagramId: string, json: string): Promise<Diagram> {
+    // التحقق من أن JSON صالح وليس فارغًا
+    try {
+      const diagramData = JSON.parse(json);
+
+      const hasNodes = diagramData.nodes && diagramData.nodes.length > 0;
+      const hasEdges = diagramData.edges && diagramData.edges.length > 0;
+
+      // إذا كان المخطط فارغًا، استرجع المخطط الحالي بدلاً من تحديثه
+      if (!hasNodes && !hasEdges) {
+        console.log("Attempted to update with empty diagram - returning current diagram instead");
+        const currentDiagram = await this.findById(diagramId);
+        return currentDiagram;
+      }
+    } catch (error) {
+      console.error("Invalid JSON for diagram update:", error);
+      throw new Error("Invalid diagram data");
+    }
+
     const diagram = await this.diagramRepository.update(diagramId, { json });
     if (!diagram) throw new NotFoundException('Diagram not found');
     return diagram;
@@ -43,13 +61,13 @@ export class DiagramService {
 
     const collaborators = diagram.collaborators || [];
     const alreadyJoined =
-      collaborators.some((c) => c.id === userId) || userId === diagram.ownerId;
+        collaborators.some((c) => c.id === userId) || userId === diagram.ownerId;
 
     if (alreadyJoined) return true;
 
     return this.diagramRepository.createCollaboratorRelationship(
-      diagramId,
-      userId,
+        diagramId,
+        userId,
     );
   }
 }
